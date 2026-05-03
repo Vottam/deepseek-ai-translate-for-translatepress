@@ -39,7 +39,6 @@ if ( PHP_VERSION_ID < 70200 ) {
 	return;
 }
 
-
 //check translatepress is active
 if (!in_array('translatepress-multilingual/index.php', get_option('active_plugins'))) {
     return ;
