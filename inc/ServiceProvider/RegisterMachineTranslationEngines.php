@@ -3,11 +3,12 @@ namespace hollisho\translatepress\translate\deepseek\inc\ServiceProvider;
 
 use hollisho\translatepress\translate\deepseek\inc\Base\ServiceProviderInterface;
 use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\DeepSeekTranslationEngine;
+use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\OpenAITranslationEngine;
 use TRP_Translate_Press;
 
 /**
  * @author Hollis
- * @desc yodao machine translation engine service provider
+ * @desc machine translation engine service provider
  * Class TranslatePressMachineTranslationEngines
  * @package hollisho\translatepress\translate\deepseek\inc\ServiceProvider
  */
@@ -29,13 +30,19 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
 
     public function add_engine_classes( $classes ){
         $classes[DeepSeekTranslationEngine::ENGINE_KEY] = DeepSeekTranslationEngine::class;
+        $classes[OpenAITranslationEngine::ENGINE_KEY]  = OpenAITranslationEngine::class;
         return $classes;
     }
 
     public function add_engine( $engines ){
-        $engines[] = [ 
+        $engines[] = [
             'value' => DeepSeekTranslationEngine::ENGINE_KEY,
-            'label' => esc_html(__('DeepSeek', 'hollisho-integration-deepseek-for-translatepress')), // translators: translation engine name
+            'label' => esc_html(__('DeepSeek', 'hollisho-integration-deepseek-for-translatepress')),
+        ];
+
+        $engines[] = [
+            'value' => OpenAITranslationEngine::ENGINE_KEY,
+            'label' => esc_html(__('OpenAI', 'hollisho-integration-deepseek-for-translatepress')),
         ];
 
         return $engines;
@@ -51,7 +58,7 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
 
         $translation_engine = $settings['translation-engine'] ?? '';
 
-        // Check for API errors.
+        // Check for API errors when DeepSeek is selected.
         if ( DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine ) {
             $trp = TRP_Translate_Press::get_trp_instance();
             $machine_translator = $trp->get_component( 'machine_translator' );
@@ -66,23 +73,53 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         $text_input_classes = array(
             'trp-text-input',
         );
-        if ( $show_errors && DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine ) {
-            $text_input_classes[] = 'trp-text-input-error';
+
+        // DeepSeek API key field.
+        if ( DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine ) {
+            if ( $show_errors ) {
+                $text_input_classes[] = 'trp-text-input-error';
+            }
+            $this->render_api_key_field(
+                $translation_engine,
+                $text_input_classes,
+                $show_errors,
+                $error_message,
+                DeepSeekTranslationEngine::FIELD_API_KEY,
+                'deepseek api key',
+                'https://api-docs.deepseek.com/',
+                $machine_translator
+            );
         }
 
-        ?>
+        // OpenAI API key field.
+        if ( OpenAITranslationEngine::ENGINE_KEY === $translation_engine ) {
+            $this->render_openai_api_key_field( $settings, $machine_translator );
+        }
+    }
 
+    /**
+     * Render API key field for DeepSeek (original behavior).
+     */
+    private function render_api_key_field(
+        $translation_engine,
+        $text_input_classes,
+        $show_errors,
+        $error_message,
+        $field_key,
+        $label,
+        $docs_url,
+        $machine_translator
+    ) {
+        ?>
         <tr>
             <th scope="row">
-                <?php 
-                    // translators: input api key
-                    echo esc_html(__('deepseek api key', 'hollisho-integration-deepseek-for-translatepress'));
+                <?php
+                    echo esc_html(__($label, 'hollisho-integration-deepseek-for-translatepress'));
                 ?>
             </th>
             <td>
                 <?php
-                // Display an error message above the input.
-                if ( $show_errors && DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine ) {
+                if ( $show_errors ) {
                     ?>
                     <p class="trp-error-inline">
                         <?php echo wp_kses_post( $error_message ); ?>
@@ -90,26 +127,67 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
                     <?php
                 }
                 ?>
-                <input type="text" id="trp-deepseek-api-key" class="<?php echo esc_html( implode( ' ', $text_input_classes ) ); ?>"
-                       name="trp_machine_translation_settings[<?php echo esc_attr(DeepSeekTranslationEngine::FIELD_API_KEY) ?>]"
-                       value="<?php if( !empty( $settings[DeepSeekTranslationEngine::FIELD_API_KEY] ) ) echo esc_attr( $settings[DeepSeekTranslationEngine::FIELD_API_KEY]); ?>"/>
+                <input type="password" id="trp-<?php echo esc_attr( $field_key ); ?>"
+                       class="<?php echo esc_html( implode( ' ', $text_input_classes ) ); ?>"
+                       name="trp_machine_translation_settings[<?php echo esc_attr( $field_key ); ?>]"
+                       value=""
+                       placeholder="<?php esc_attr_e( 'Enter API key', 'hollisho-integration-deepseek-for-translatepress' ); ?>"
+                       autocomplete="off"
+                />
                 <?php
-                // Show error or success SVG.
                 if ( method_exists( $machine_translator, 'automatic_translation_svg_output' ) && DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine ) {
                     $machine_translator->automatic_translation_svg_output( $show_errors );
                 }
                 ?>
                 <p class="description">
-                    <?php 
-                        // translators: visit deepseek api url.
+                    <?php
                         $text = __( 'Visit <a href="%s" target="_blank">this link</a> to see how you can set up an API key and control API costs.', 'hollisho-integration-deepseek-for-translatepress' );
-                        echo wp_kses( sprintf( $text, 'https://api-docs.deepseek.com/' ), [ 'a' => [ 'href' => [], 'target'=> [] ] ] )
+                        echo wp_kses( sprintf( $text, $docs_url ), [ 'a' => [ 'href' => [], 'target'=> [] ] ] )
                     ?>
                 </p>
             </td>
-
         </tr>
+        <?php
+    }
 
+    /**
+     * Render API key field for OpenAI.
+     *
+     * @param array $settings         The settings.
+     * @param object $machine_translator The machine translator instance.
+     * @return void
+     */
+    private function render_openai_api_key_field( $settings, $machine_translator ) {
+        $api_key = $settings[OpenAITranslationEngine::FIELD_API_KEY] ?? '';
+        $is_configured = ! empty( $api_key );
+        ?>
+        <tr>
+            <th scope="row">
+                <?php esc_html_e( 'OpenAI API key', 'hollisho-integration-deepseek-for-translatepress' ); ?>
+            </th>
+            <td>
+                <input type="password"
+                       id="trp-openai-api-key"
+                       class="trp-text-input"
+                       name="trp_machine_translation_settings[<?php echo esc_attr( OpenAITranslationEngine::FIELD_API_KEY ); ?>]"
+                       value=""
+                       placeholder="<?php echo $is_configured ? esc_attr__( '•••••••• configured (enter new key to change)', 'hollisho-integration-deepseek-for-translatepress' ) : esc_attr__( 'Enter your OpenAI API key', 'hollisho-integration-deepseek-for-translatepress' ); ?>"
+                       autocomplete="off"
+                />
+                <?php if ( $is_configured ) : ?>
+                    <p class="description">
+                        <?php esc_html_e( 'A key is configured. Enter a new key above to replace it.', 'hollisho-integration-deepseek-for-translatepress' ); ?>
+                    </p>
+                <?php else : ?>
+                    <p class="description">
+                        <?php
+                            $text = __( 'Visit <a href="%s" target="_blank">this link</a> to get your OpenAI API key.', 'hollisho-integration-deepseek-for-translatepress' );
+                            echo wp_kses( sprintf( $text, 'https://platform.openai.com/api-keys' ), [ 'a' => [ 'href' => [], 'target'=> [] ] ] );
+                        ?>
+                    </p>
+                <?php endif; ?>
+            </td>
+        </tr>
         <?php
     }
 
@@ -117,13 +195,14 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         if( !empty( $mt_settings[DeepSeekTranslationEngine::FIELD_API_KEY] ) )
             $settings[DeepSeekTranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[DeepSeekTranslationEngine::FIELD_API_KEY] );
 
+        if( !empty( $mt_settings[OpenAITranslationEngine::FIELD_API_KEY] ) )
+            $settings[OpenAITranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[OpenAITranslationEngine::FIELD_API_KEY] );
+
         return $settings;
     }
 
     /**
      * Particularities for source language in API.
-     *
-     * PT_BR is not treated in the same way as for the target language
      *
      * @param $source_language
      * @param $source_language_code
