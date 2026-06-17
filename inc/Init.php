@@ -7,6 +7,8 @@
 
 namespace hollisho\translatepress\translate\deepseek\inc;
 
+use hollisho\translatepress\translate\deepseek\inc\Admin\AjaxController;
+use hollisho\translatepress\translate\deepseek\inc\Admin\SettingsPage;
 use hollisho\translatepress\translate\deepseek\inc\ServiceProvider\RegisterMachineTranslationEngines;
 use hollisho\translatepress\translate\deepseek\inc\ServiceProvider\RegisterScripts;
 
@@ -42,6 +44,24 @@ class Init {
                 $service->register();
             }
         }
+
+        // Initialize admin (only in admin context).
+        if ( is_admin() ) {
+            self::init_admin();
+        }
+    }
+
+    /**
+     * Initialize admin components.
+     *
+     * @return void
+     */
+    private static function init_admin(): void {
+        $settings_page = new SettingsPage();
+        $settings_page->init();
+
+        $ajax_controller = new AjaxController();
+        $ajax_controller->init();
     }
 
     /**
