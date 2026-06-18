@@ -28,22 +28,21 @@ class PromptBuilder {
         $source_name = $this->get_language_name( $source_language );
         $target_name = $this->get_language_name( $target_language );
 
-        if ( $source_language === 'auto' || empty( $source_name ) ) {
-            return sprintf(
-                'Translate the following content to %s, maintaining a professional tone. Return only the translated text:%s%s',
-                $target_name,
-                "\n\n",
-                $text
-            );
+        $instructions = "Translate the following content to {$target_name}. "
+            . "Maintain a professional tone. "
+            . "Return ONLY the translated text. "
+            . "Do NOT add numbering, bullets, labels, quotes, markdown, explanations, or comments. "
+            . "Preserve all placeholders (%s, %d, {name}, {{var}}), HTML tags, and shortcodes.";
+
+        if ( $source_language !== 'auto' && ! empty( $source_name ) ) {
+            $instructions = "Translate the following {$source_name} content to {$target_name}. "
+                . "Maintain a professional tone. "
+                . "Return ONLY the translated text. "
+                . "Do NOT add numbering, bullets, labels, quotes, markdown, explanations, or comments. "
+                . "Preserve all placeholders (%s, %d, {name}, {{var}}), HTML tags, and shortcodes.";
         }
 
-        return sprintf(
-            'Translate the following %s content to %s, maintaining a professional tone. Return only the translated text:%s%s',
-            $source_name,
-            $target_name,
-            "\n\n",
-            $text
-        );
+        return $instructions . "\n\n" . $text;
     }
 
     /**

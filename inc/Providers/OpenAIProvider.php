@@ -158,9 +158,10 @@ class OpenAIProvider extends AbstractProvider {
         $instructions = "You are a professional translator. ";
         $instructions .= "Translate the following content to {$target_name}. ";
         $instructions .= "Maintain a professional tone. ";
+        $instructions .= "Return ONLY the translated text. ";
+        $instructions .= "Do NOT add numbering, bullets, labels, quotes, markdown, explanations, or comments. ";
         $instructions .= "Preserve all HTML tags, shortcodes, placeholders (%s, %d, {name}, {{var}}), and special characters exactly as they are. ";
-        $instructions .= "Do NOT translate placeholders or variable names. ";
-        $instructions .= "Return ONLY the translated text, without any explanations or notes.";
+        $instructions .= "Do NOT translate placeholders or variable names.";
 
         if ( $source_language && $source_language !== 'auto' ) {
             $source_name = $this->get_language_name( $source_language );

@@ -182,16 +182,40 @@ class OpenAITranslationEngine extends TRP_Machine_Translator {
             return array_values( $decoded );
         }
 
+        // Try '---' delimiter (new batch format).
+        if ( strpos( $content, '---' ) !== false ) {
+            $parts = preg_split( '/\n?---\n?/', $content, -1, PREG_SPLIT_NO_EMPTY );
+            foreach ( $parts as $part ) {
+                $item = trim( $part );
+                // Defensive: remove residual numbering like "1. " or "2. " etc.
+                $item = preg_replace( '/^\s*\d+\.\s+/', '', $item );
+                if ( ! empty( $item ) ) {
+                    $items[] = $item;
+                }
+            }
+            return $items;
+        }
+
         // Split by newlines if multiple items.
         if ( $expected_count > 1 ) {
             $lines = preg_split( '/\n/', $content, -1, PREG_SPLIT_NO_EMPTY );
             foreach ( $lines as $line ) {
-                $items[] = trim( $line );
+                $line = trim( $line );
+                // Defensive: remove residual numbering like "1. " or "2. " etc.
+                $line = preg_replace( '/^\s*\d+\.\s+/', '', $line );
+                if ( ! empty( $line ) ) {
+                    $items[] = $line;
+                }
             }
         }
 
         if ( empty( $items ) && ! empty( $content ) ) {
-            $items[] = $content;
+            $content = trim( $content );
+            // Defensive: remove residual numbering like "1. " for single items.
+            $content = preg_replace( '/^\s*\d+\.\s+/', '', $content );
+            if ( ! empty( $content ) ) {
+                $items[] = $content;
+            }
         }
 
         return $items;

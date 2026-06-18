@@ -58,19 +58,29 @@ class DeepSeekApiHelper {
      */
     public static function convert($texts, $sourceLang, $targetLang)
     {
-        // 构造批量翻译提示词
-        $counter = 0;
-        $itemsList = implode("\n", array_map(function($text) use (&$counter) {
-            return (++$counter) . ". " . $text;
-        }, $texts));
+        // Build batch prompt WITHOUT numbering to avoid LLM adding "1. " prefix.
+        // Use a clear delimiter between items.
+        $itemsList = implode("\n---\n", $texts);
 
-        if ($sourceLang === 'auto') {
-            $prompt = "请将以下内容逐条翻译成" . self::supportedLanguages[$targetLang] .
-                "，保持专业语气，并严格按照原格式返回（保留编号）:\n\n" . $itemsList;
+        $targetName = self::supportedLanguages[$targetLang] ?? $targetLang;
+
+        if ($sourceLang === 'auto' || empty($sourceLang)) {
+            $prompt = "Translate the following content to {$targetName}. "
+                . "Maintain a professional tone. "
+                . "Return ONLY the translated text. "
+                . "Do NOT add numbering, bullets, labels, quotes, markdown, explanations, or comments. "
+                . "Separate each translated item with '---' (same delimiter as input). "
+                . "Preserve all placeholders (%s, %d, {name}, {{var}}), HTML tags, and shortcodes.\n\n"
+                . $itemsList;
         } else {
-            $prompt = "请将以下" . self::supportedLanguages[$sourceLang] . "内容逐条翻译成" .
-                self::supportedLanguages[$targetLang] .
-                "，保持专业语气，并严格按照原格式返回（保留编号）:\n\n" . $itemsList;
+            $sourceName = self::supportedLanguages[$sourceLang] ?? $sourceLang;
+            $prompt = "Translate the following {$sourceName} content to {$targetName}. "
+                . "Maintain a professional tone. "
+                . "Return ONLY the translated text. "
+                . "Do NOT add numbering, bullets, labels, quotes, markdown, explanations, or comments. "
+                . "Separate each translated item with '---' (same delimiter as input). "
+                . "Preserve all placeholders (%s, %d, {name}, {{var}}), HTML tags, and shortcodes.\n\n"
+                . $itemsList;
         }
         return $prompt;
     }
@@ -78,21 +88,47 @@ class DeepSeekApiHelper {
 
 
     public static function parseTranslatedItems($content, $expectedCount) {
-        $lines = explode("\n", $content);
+        // Split by '---' delimiter first (new format), then by newlines.
         $items = [];
 
+        // Try splitting by '---' delimiter (new batch format).
+        if (strpos($content, '---') !== false) {
+            $parts = preg_split('/\n?---\n?/', $content, -1, PREG_SPLIT_NO_EMPTY);
+            foreach ($parts as $part) {
+                $item = trim($part);
+                // Defensive: remove residual numbering like "1. " or "2. " etc.
+                $item = preg_replace('/^\s*\d+\.\s+/', '', $item);
+                if (!empty($item)) {
+                    $items[] = $item;
+                }
+            }
+            return $items;
+        }
+
+        // Fallback: split by newlines.
+        $lines = explode("\n", $content);
         foreach ($lines as $line) {
-            // 匹配 "数字. 翻译内容" 格式
-            if (preg_match('/^\s*(\d+)\.\s*(.+?)\s*$/', $line, $matches)) {
-                $index = (int)$matches[1] - 1;  // 转换为0-based索引
-                $items[$index] = $matches[2];
+            $line = trim($line);
+            if (empty($line)) {
+                continue;
+            }
+            // Defensive: remove residual numbering like "1. " or "2. " etc.
+            $line = preg_replace('/^\s*\d+\.\s+/', '', $line);
+            if (!empty($line)) {
+                $items[] = $line;
             }
         }
 
+        // If only one item and it's the entire content, return it.
+        if (empty($items) && !empty($content)) {
+            $content = trim($content);
+            $content = preg_replace('/^\s*\d+\.\s+/', '', $content);
+            if (!empty($content)) {
+                $items[] = $content;
+            }
+        }
 
-        // 按索引排序
-        ksort($items);
-        return array_values($items);
+        return $items;
     }
 
 }
