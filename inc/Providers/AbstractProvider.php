@@ -58,9 +58,17 @@ abstract class AbstractProvider implements ProviderInterface {
      */
     public function get_api_key() {
         $key_name = $this->get_api_key_setting_name();
+
+        // Settings may be nested under 'trp_machine_translation_settings' (TranslatePress convention)
+        if ( isset( $this->settings['trp_machine_translation_settings'][ $key_name ] ) ) {
+            return $this->settings['trp_machine_translation_settings'][ $key_name ];
+        }
+
+        // Fallback: flat settings structure.
         if ( ! empty( $key_name ) && isset( $this->settings[ $key_name ] ) ) {
             return $this->settings[ $key_name ];
         }
+
         return false;
     }
 
