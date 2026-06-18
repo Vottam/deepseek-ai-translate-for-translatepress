@@ -1,51 +1,48 @@
 <?php
 /**
- * DeepSeek translation engine — adapted to use new provider infrastructure.
+ * OpenAI translation engine for TranslatePress.
  *
  * @package hollisho\translatepress\translate\deepseek\inc\TranslationEngines
  */
 
 namespace hollisho\translatepress\translate\deepseek\inc\TranslationEngines;
 
-use hollisho\translatepress\translate\deepseek\inc\Providers\DeepSeekProvider;
-use hollisho\translatepress\translate\deepseek\inc\Translation\TranslationRequest;
+use hollisho\translatepress\translate\deepseek\inc\Providers\OpenAIProvider;
 use TRP_Machine_Translator;
 use WP_Error;
 
 /**
- * Class DeepSeekTranslationEngine
+ * Class OpenAITranslationEngine
  *
- * DeepSeek machine translation engine.
- * Now uses DeepSeekProvider internally while maintaining full backward
- * compatibility with the TRP_Machine_Translator interface.
+ * OpenAI machine translation engine using Responses API.
+ * Registered as a separate option in the TranslatePress dropdown.
  */
-class DeepSeekTranslationEngine extends TRP_Machine_Translator {
+class OpenAITranslationEngine extends TRP_Machine_Translator {
 
-    const ENGINE_KEY = 'deepseek_translate';
+    const ENGINE_KEY  = 'openai';
+    const FIELD_API_KEY = 'openai-api-key';
 
-    const FIELD_API_KEY='***';
-
-    /** @var DeepSeekProvider|null */
+    /** @var OpenAIProvider|null */
     private $provider = null;
 
     /**
      * Get the provider instance (lazy-loaded).
      *
-     * @return DeepSeekProvider|null
+     * @return OpenAIProvider|null
      */
-    protected function get_provider(): ?DeepSeekProvider {
+    protected function get_provider(): ?OpenAIProvider {
         if ( null === $this->provider ) {
             $settings = $this->settings ?? [];
             if ( ! isset( $settings['trp_machine_translation_settings'] ) ) {
                 $settings['trp_machine_translation_settings'] = [];
             }
-            $this->provider = new DeepSeekProvider( $settings );
+            $this->provider = new OpenAIProvider( $settings );
         }
         return $this->provider;
     }
 
     /**
-     * Send request to DeepSeek API.
+     * Send request to OpenAI API.
      *
      * @param string $source_language Source language code.
      * @param string $language_code   Target language code.
@@ -57,7 +54,10 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
         $provider = $this->get_provider();
 
         if ( ! $provider ) {
-            return new WP_Error( 'provider_error', __( 'DeepSeek provider could not be initialized.', 'hollisho-integration-deepseek-for-translatepress' ) );
+            return new WP_Error(
+                'provider_error',
+                __( 'OpenAI provider could not be initialized.', 'hollisho-integration-deepseek-for-translatepress' )
+            );
         }
 
         return $provider->send_raw_request( $source_language, $language_code, $strings_array );
@@ -83,8 +83,8 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
 
         $translated_strings = [];
 
-        $source_language = apply_filters( 'trp_deepseek_source_language', $this->machine_translation_codes[ $source_language_code ] ?? $source_language_code, $source_language_code, $target_language_code );
-        $target_language = apply_filters( 'trp_deepseek_target_language', $this->machine_translation_codes[ $target_language_code ] ?? $target_language_code, $source_language_code, $target_language_code );
+        $source_language = $this->machine_translation_codes[ $source_language_code ] ?? $source_language_code;
+        $target_language = $this->machine_translation_codes[ $target_language_code ] ?? $target_language_code;
 
         $new_strings_chunks = array_chunk( $new_strings, 64, true );
 
@@ -107,8 +107,8 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
                 $translation_response = json_decode( $response['body'] );
 
                 if ( empty( $translation_response->error ) ) {
-                    $translated_content = $translation_response->choices[0]->message->content ?? '';
-                    $translations       = \hollisho\translatepress\translate\deepseek\inc\Helpers\DeepSeekApiHelper::parseTranslatedItems( $translated_content, count( $new_strings_chunk ) );
+                    $translated_content = $this->extract_translated_content( $translation_response );
+                    $translations       = $this->parse_translated_items( $translated_content, count( $new_strings_chunk ) );
                     $i = 0;
 
                     foreach ( $new_strings_chunk as $key => $old_string ) {
@@ -128,6 +128,73 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
         }
 
         return $translated_strings;
+    }
+
+    /**
+     * Extract translated content from OpenAI response.
+     *
+     * @param object $response The decoded response body.
+     * @return string The translated content.
+     */
+    private function extract_translated_content( $response ): string {
+        // OpenAI Responses API: output_text helper.
+        if ( isset( $response->output_text ) && is_string( $response->output_text ) ) {
+            return $response->output_text;
+        }
+
+        // Fallback: iterate output[].
+        if ( isset( $response->output ) && is_array( $response->output ) ) {
+            $texts = [];
+            foreach ( $response->output as $item ) {
+                if ( isset( $item->type ) && $item->type === 'message' && isset( $item->content ) ) {
+                    if ( is_array( $item->content ) ) {
+                        foreach ( $item->content as $content_item ) {
+                            if ( isset( $content_item->type ) && $content_item->type === 'output_text' && isset( $content_item->text ) ) {
+                                $texts[] = $content_item->text;
+                            }
+                        }
+                    } elseif ( is_string( $item->content ) ) {
+                        $texts[] = $item->content;
+                    }
+                }
+            }
+            if ( ! empty( $texts ) ) {
+                return implode( "\n", $texts );
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Parse translated items from content.
+     *
+     * @param string $content        The translated content.
+     * @param int    $expected_count Expected number of items.
+     * @return array Parsed translations.
+     */
+    private function parse_translated_items( string $content, int $expected_count ): array {
+        $items = [];
+
+        // Try JSON array first.
+        $decoded = json_decode( $content, true );
+        if ( is_array( $decoded ) ) {
+            return array_values( $decoded );
+        }
+
+        // Split by newlines if multiple items.
+        if ( $expected_count > 1 ) {
+            $lines = preg_split( '/\n/', $content, -1, PREG_SPLIT_NO_EMPTY );
+            foreach ( $lines as $line ) {
+                $items[] = trim( $line );
+            }
+        }
+
+        if ( empty( $items ) && ! empty( $content ) ) {
+            $items[] = $content;
+        }
+
+        return $items;
     }
 
     /**
@@ -157,7 +224,7 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
 
             if ( empty( $api_key ) ) {
                 $is_error       = true;
-                $return_message = '请输入您的 API 密钥。格式请参考下面说明';
+                $return_message = __( 'Please enter your OpenAI API key.', 'hollisho-integration-deepseek-for-translatepress' );
             }
 
             $this->correct_api_key = [
@@ -188,6 +255,6 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
      * @return string
      */
     public function get_api_url(): string {
-        return 'https://api.deepseek.com/chat/completions';
+        return 'https://api.openai.com/v1/responses';
     }
 }
