@@ -22,7 +22,7 @@ class DeepSeekProvider extends AbstractProvider {
 
     const ENGINE_KEY = 'deepseek_translate';
 
-    const FIELD_API_KEY = '***';
+    const FIELD_API_KEY = 'deepseek-api-key';
 
     const DEFAULT_API_URL = 'https://api.deepseek.com/chat/completions';
 
