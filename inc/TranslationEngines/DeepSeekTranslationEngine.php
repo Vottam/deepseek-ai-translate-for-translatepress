@@ -8,6 +8,8 @@
 namespace hollisho\translatepress\translate\deepseek\inc\TranslationEngines;
 
 use hollisho\translatepress\translate\deepseek\inc\Providers\DeepSeekProvider;
+use hollisho\translatepress\translate\deepseek\inc\Translation\BatchIntegrityValidator;
+use hollisho\translatepress\translate\deepseek\inc\Translation\ChunkingStrategy;
 use hollisho\translatepress\translate\deepseek\inc\Translation\TranslationRequest;
 use TRP_Machine_Translator;
 use WP_Error;
@@ -86,48 +88,119 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
         $source_language = apply_filters( 'trp_deepseek_source_language', $this->machine_translation_codes[ $source_language_code ] ?? $source_language_code, $source_language_code, $target_language_code );
         $target_language = apply_filters( 'trp_deepseek_target_language', $this->machine_translation_codes[ $target_language_code ] ?? $target_language_code, $source_language_code, $target_language_code );
 
-        $new_strings_chunks = array_chunk( $new_strings, 64, true );
+        // Use ChunkingStrategy for safe chunk sizes (max 25 strings, 50k chars).
+        $validator = new BatchIntegrityValidator();
+        $chunks    = ChunkingStrategy::split( $new_strings, BatchIntegrityValidator::MAX_BATCH_STRINGS, BatchIntegrityValidator::MAX_BATCH_CHARS );
 
-        foreach ( $new_strings_chunks as $new_strings_chunk ) {
-            $response = $this->send_request( $source_language, $target_language, $new_strings_chunk );
+        foreach ( $chunks as $chunk ) {
+            $chunk_result = $this->translate_chunk_with_retry( $chunk, $source_language, $target_language );
 
-            // Log if enabled.
-            $this->machine_translator_logger->log( [
-                'strings'      => serialize( $new_strings_chunk ),
-                'response'     => serialize( $response ),
-                'lang_source'  => $source_language,
-                'lang_target'  => $target_language,
-            ] );
+            if ( is_wp_error( $chunk_result ) ) {
+                // Integrity check failed — do NOT save partial translations.
+                $this->machine_translator_logger->log( [
+                    'error'       => 'batch_integrity_fail',
+                    'error_code'  => $chunk_result->get_error_code(),
+                    'chunk_size'  => count( $chunk ),
+                    'lang_source' => $source_language,
+                    'lang_target' => $target_language,
+                ] );
 
-            if ( is_array( $response ) && ! is_wp_error( $response ) && isset( $response['response'] ) &&
-                isset( $response['response']['code'] ) && $response['response']['code'] == 200 ) {
-
-                $this->machine_translator_logger->count_towards_quota( $new_strings_chunk );
-
-                $translation_response = json_decode( $response['body'] );
-
-                if ( empty( $translation_response->error ) ) {
-                    $translated_content = $translation_response->choices[0]->message->content ?? '';
-                    $translations       = \hollisho\translatepress\translate\deepseek\inc\Helpers\DeepSeekApiHelper::parseTranslatedItems( $translated_content, count( $new_strings_chunk ) );
-                    $i = 0;
-
-                    foreach ( $new_strings_chunk as $key => $old_string ) {
-                        if ( isset( $translations[ $i ] ) && ! empty( $translations[ $i ] ) ) {
-                            $translated_strings[ $key ] = $translations[ $i ];
-                        } else {
-                            $translated_strings[ $key ] = $old_string;
-                        }
-                        $i++;
-                    }
-                }
-
-                if ( $this->machine_translator_logger->quota_exceeded() ) {
-                    break;
-                }
+                // Return WP_Error to signal failure to TranslatePress.
+                return $chunk_result;
             }
+
+            $translated_strings = array_merge( $translated_strings, $chunk_result );
         }
 
         return $translated_strings;
+    }
+
+    /**
+     * Translate a single chunk with retry and integrity validation.
+     *
+     * @param array  $chunk           Strings to translate.
+     * @param string $source_language Source language code.
+     * @param string $target_language Target language code.
+     *
+     * @return array|WP_Error Translated strings or error.
+     */
+    private function translate_chunk_with_retry( array $chunk, string $source_language, string $target_language ) {
+        $validator     = new BatchIntegrityValidator();
+        $chunk_size  = count( $chunk );
+        $retry_sizes = ChunkingStrategy::get_retry_strategy( $chunk_size );
+
+        // Try with original chunk size first.
+        $response = $this->send_request( $source_language, $target_language, $chunk );
+
+        if ( is_wp_error( $response ) ) {
+            return $response;
+        }
+
+        if ( ! ( is_array( $response ) && isset( $response['response'] ) &&
+            isset( $response['response']['code'] ) && $response['response']['code'] == 200 ) ) {
+            return new WP_Error(
+                'deepseek_http_error',
+                sprintf( 'DeepSeek returned non-200 status for chunk of %d items.', $chunk_size )
+            );
+        }
+
+        $translation_response = json_decode( $response['body'] );
+
+        if ( empty( $translation_response->error ) ) {
+            $translated_content = $translation_response->choices[0]->message->content ?? '';
+            $parsed_items       = \hollisho\translatepress\translate\deepseek\inc\Helpers\DeepSeekApiHelper::parseTranslatedItems( $translated_content, count( $chunk ) );
+
+            // Map parsed translations back to original chunk keys for integrity validation.
+            $chunk_keys   = array_keys( $chunk );
+            $translations = [];
+            foreach ( $chunk_keys as $index => $key ) {
+                $translations[ $key ] = $parsed_items[ $index ] ?? '';
+            }
+
+            // Validate integrity.
+            $integrity = $validator->validate( $chunk, $translations );
+            if ( is_wp_error( $integrity ) ) {
+                // Try smaller chunks.
+                foreach ( $retry_sizes as $new_size ) {
+                    if ( $new_size >= $chunk_size ) {
+                        continue;
+                    }
+
+                    $sub_chunks     = array_chunk( $chunk, $new_size, true );
+                    $all_valid      = true;
+                    $all_translated = [];
+
+                    foreach ( $sub_chunks as $sub_chunk ) {
+                        $sub_result = $this->translate_chunk_with_retry( $sub_chunk, $source_language, $target_language );
+                        if ( is_wp_error( $sub_result ) ) {
+                            $all_valid = false;
+                            break;
+                        }
+                        $all_translated = array_merge( $all_translated, $sub_result );
+                    }
+
+                    if ( $all_valid ) {
+                        return $all_translated;
+                    }
+
+                    $chunk_size = $new_size;
+                }
+
+                // All retries failed — return error, do NOT save partial translations.
+                return $integrity;
+            }
+
+            // Integrity passed — count towards quota and return.
+            $this->machine_translator_logger->count_towards_quota( $chunk );
+
+            return $translations;
+        }
+
+        // API error.
+        return new WP_Error(
+            'deepseek_api_error',
+            'DeepSeek API error: ' . ( $translation_response->error->message ?? 'unknown' )
+        );
     }
 
     /**

@@ -44,8 +44,8 @@ class PlaceholderPreserver {
         $this->placeholders = [];
         $this->counter      = 0;
 
-        // Preserve WordPress shortcodes.
-        $text = $this->preserve_pattern( $text, '/\[\/?[a-zA-Z0-9_-]+(?:\s[^\]]*?)?(?:\].*?\[\/\1\]|\s*\/\]|\s*\])/s' );
+        // Preserve WordPress shortcodes (non-nested only).
+        $text = $this->preserve_pattern( $text, '/\[\/?[a-zA-Z0-9_-]+(?:\s[^\]]*?)?\s*\]/s' );
 
         // Preserve sprintf-style placeholders.
         $text = $this->preserve_pattern( $text, '/%[0-9]*\$?[sdfeEgGcxXobB%]/' );
