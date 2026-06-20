@@ -1,0 +1,106 @@
+{
+    "pass": 20,
+    "fail": 0,
+    "results": [
+        {
+            "name": "es\u2192pt_BR identical text detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "es\u2192pt_BR mixed text detected as leak",
+            "status": "PASS",
+            "detail": "Found 2 exclusive source stopwords: puedes, desde | Found 3 Spanish orthographic markers: dad, puedes, puede | N-gram similarity 98.9% exceeds pair threshold 85.0%. | Near-identical text: 85.8% similarity (threshold 85%)."
+        },
+        {
+            "name": "es\u2192pt_BR correct Portuguese passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192pt_BR: 1\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192en identical Spanish text detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "es\u2192en correct English passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192en: 0\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192it identical Spanish text detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "es\u2192it correct Italian passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192it: 0\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192fr identical Spanish text detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "es\u2192fr correct French passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192fr: 0\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192de identical Spanish text detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "es\u2192de correct German passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192de: 0\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192tr identical Spanish text detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "es\u2192tr correct Turkish passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192tr: 0\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "Technical terms whitelist (identical technical text correctly flagged as identical)",
+            "status": "PASS",
+            "detail": "Identical text is always flagged (correct behavior)"
+        },
+        {
+            "name": "Technical terms in non-identical translation passes",
+            "status": "PASS",
+            "detail": "Latin pair es\u2192pt_BR: 1\/6 leak signals \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192ko correct Korean passes",
+            "status": "PASS",
+            "detail": "Target Korean: script ratio 100.0%, Latin ratio 0.0% \u2014 acceptable."
+        },
+        {
+            "name": "es\u2192ko Spanish text as Korean detected as leak",
+            "status": "PASS",
+            "detail": "Translation is identical to source."
+        },
+        {
+            "name": "Spanish orthographic markers (\u00bf, \u00a1, \u00f1) detected in pt_BR",
+            "status": "PASS",
+            "detail": "Found 3 exclusive source stopwords: la, puedo, muy | Found 4 Spanish orthographic markers: \u00bf, \u00a1, \u00f1, \u00d1 | No evidence of target language pt_BR in translation (checked 44 required patterns). | N-gram similarity 101.9% exceeds pair threshold 85.0%. | Longest common substring ratio 94.8% exceeds 50%. | Near-identical text: 97.6% similarity (threshold 85%)."
+        },
+        {
+            "name": "Batch with all Spanish items detected as leak",
+            "status": "PASS",
+            "detail": "Source leak detected in 4\/4 items (100.0%)."
+        },
+        {
+            "name": "Batch with correct Portuguese passes",
+            "status": "PASS",
+            "detail": "No significant source leak detected in batch."
+        }
+    ]
+}
