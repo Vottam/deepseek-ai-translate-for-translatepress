@@ -4,6 +4,7 @@ namespace hollisho\translatepress\translate\deepseek\inc\ServiceProvider;
 use hollisho\translatepress\translate\deepseek\inc\Base\ServiceProviderInterface;
 use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\DeepSeekTranslationEngine;
 use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\OpenAITranslationEngine;
+use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\OpenRouterTranslationEngine;
 use TRP_Translate_Press;
 
 /**
@@ -29,6 +30,7 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
     public function add_engine_classes( $classes ){
         $classes[DeepSeekTranslationEngine::ENGINE_KEY] = DeepSeekTranslationEngine::class;
         $classes[OpenAITranslationEngine::ENGINE_KEY]  = OpenAITranslationEngine::class;
+        $classes[OpenRouterTranslationEngine::ENGINE_KEY] = OpenRouterTranslationEngine::class;
         return $classes;
     }
 
@@ -41,6 +43,11 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         $engines[] = [
             'value' => OpenAITranslationEngine::ENGINE_KEY,
             'label' => esc_html(__('OpenAI', 'hollisho-integration-deepseek-for-translatepress')),
+        ];
+
+        $engines[] = [
+            'value' => OpenRouterTranslationEngine::ENGINE_KEY,
+            'label' => esc_html(__('OpenRouter', 'hollisho-integration-deepseek-for-translatepress')),
         ];
 
         return $engines;
@@ -57,7 +64,7 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         $translation_engine = $settings['translation-engine'] ?? '';
 
         // Check for API errors when the selected engine matches.
-        if ( DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine || OpenAITranslationEngine::ENGINE_KEY === $translation_engine ) {
+        if ( DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine || OpenAITranslationEngine::ENGINE_KEY === $translation_engine || OpenRouterTranslationEngine::ENGINE_KEY === $translation_engine ) {
             $api_check = $machine_translator->check_api_key_validity();
         }
 
@@ -84,6 +91,7 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         );
 
         $this->render_openai_api_key_field( $settings, $machine_translator, $show_errors, $error_message );
+        $this->render_openrouter_api_key_field( $settings, $machine_translator, $show_errors, $error_message );
     }
 
     /**
@@ -185,6 +193,72 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         <?php
     }
 
+    /**
+     * Render OpenRouter API key and model fields.
+     */
+    private function render_openrouter_api_key_field( $settings, $machine_translator, $show_errors = false, $error_message = '' ) {
+        $field_key    = OpenRouterTranslationEngine::FIELD_API_KEY;
+        $field_model  = OpenRouterTranslationEngine::FIELD_MODEL;
+        $api_key      = $settings[ $field_key ] ?? '';
+        $model        = $settings[ $field_model ] ?? '';
+        ?>
+        <div class="trp-engine trp-automatic-translation-engine__container" id="<?php echo esc_attr( OpenRouterTranslationEngine::ENGINE_KEY ); ?>">
+        <tr>
+            <th scope="row">
+                <?php esc_html_e( 'OpenRouter API key', 'hollisho-integration-deepseek-for-translatepress' ); ?>
+            </th>
+            <td>
+                <?php
+                if ( $show_errors ) {
+                    ?>
+                    <p class="trp-error-inline">
+                        <?php echo wp_kses_post( $error_message ); ?>
+                    </p>
+                    <?php
+                }
+                ?>
+                <input type="text"
+                       id="trp-openrouter-api-key"
+                       class="trp-text-input<?php echo $show_errors ? ' trp-text-input-error' : ''; ?>"
+                       name="trp_machine_translation_settings[<?php echo esc_attr( $field_key ); ?>]"
+                       value="<?php echo esc_attr( $api_key ); ?>"
+                       autocomplete="off"
+                />
+                <?php
+                if ( method_exists( $machine_translator, 'automatic_translation_svg_output' ) ) {
+                    $machine_translator->automatic_translation_svg_output( $show_errors );
+                }
+                ?>
+                <p class="description">
+                    <?php
+                        $text = __( 'Visit <a href="%s" target="_blank">this link</a> to get your OpenRouter API key.', 'hollisho-integration-deepseek-for-translatepress' );
+                        echo wp_kses( sprintf( $text, 'https://openrouter.ai/keys' ), [ 'a' => [ 'href' => [], 'target'=> [] ] ] )
+                    ?>
+                </p>
+            </td>
+        </tr>
+        <tr>
+            <th scope="row">
+                <?php esc_html_e( 'OpenRouter model', 'hollisho-integration-deepseek-for-translatepress' ); ?>
+            </th>
+            <td>
+                <input type="text"
+                       id="trp-openrouter-model"
+                       class="trp-text-input"
+                       name="trp_machine_translation_settings[<?php echo esc_attr( $field_model ); ?>]"
+                       value="<?php echo esc_attr( $model ); ?>"
+                       placeholder="openai/gpt-4o-mini"
+                       autocomplete="off"
+                />
+                <p class="description">
+                    <?php esc_html_e( 'Enter the OpenRouter model slug (e.g., openai/gpt-4o-mini, anthropic/claude-3-haiku).', 'hollisho-integration-deepseek-for-translatepress' ); ?>
+                </p>
+            </td>
+        </tr>
+        </div>
+        <?php
+    }
+
     public function sanitize_settings( $settings, $mt_settings ){
         // DeepSeek API key: save only if non-empty.
         if( !empty( $mt_settings[DeepSeekTranslationEngine::FIELD_API_KEY] ) )
@@ -193,6 +267,14 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         // OpenAI API key: save only if non-empty.
         if( !empty( $mt_settings[OpenAITranslationEngine::FIELD_API_KEY] ) )
             $settings[OpenAITranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[OpenAITranslationEngine::FIELD_API_KEY] );
+
+        // OpenRouter API key: save only if non-empty.
+        if( !empty( $mt_settings[OpenRouterTranslationEngine::FIELD_API_KEY] ) )
+            $settings[OpenRouterTranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[OpenRouterTranslationEngine::FIELD_API_KEY] );
+
+        // OpenRouter model: save only if non-empty.
+        if( !empty( $mt_settings[OpenRouterTranslationEngine::FIELD_MODEL] ) )
+            $settings[OpenRouterTranslationEngine::FIELD_MODEL] = sanitize_text_field( $mt_settings[OpenRouterTranslationEngine::FIELD_MODEL] );
 
         return $settings;
     }
