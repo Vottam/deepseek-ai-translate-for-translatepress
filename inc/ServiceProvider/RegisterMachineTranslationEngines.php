@@ -260,21 +260,34 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
     }
 
     public function sanitize_settings( $settings, $mt_settings ){
-        // DeepSeek API key: save only if non-empty.
+        // Preserve existing API keys when fields are not present in POST
+        // (e.g., when switching engines, hidden fields are not submitted).
+        // Follows the same pattern as TranslatePress core (class-machine-translation-tab.php).
+        $existing = get_option( 'trp_machine_translation_settings', [] );
+
+        // DeepSeek API key: save only if non-empty in POST, otherwise preserve existing.
         if( !empty( $mt_settings[DeepSeekTranslationEngine::FIELD_API_KEY] ) )
             $settings[DeepSeekTranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[DeepSeekTranslationEngine::FIELD_API_KEY] );
+        elseif( isset( $existing[DeepSeekTranslationEngine::FIELD_API_KEY] ) )
+            $settings[DeepSeekTranslationEngine::FIELD_API_KEY] = $existing[DeepSeekTranslationEngine::FIELD_API_KEY];
 
-        // OpenAI API key: save only if non-empty.
+        // OpenAI API key: save only if non-empty in POST, otherwise preserve existing.
         if( !empty( $mt_settings[OpenAITranslationEngine::FIELD_API_KEY] ) )
             $settings[OpenAITranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[OpenAITranslationEngine::FIELD_API_KEY] );
+        elseif( isset( $existing[OpenAITranslationEngine::FIELD_API_KEY] ) )
+            $settings[OpenAITranslationEngine::FIELD_API_KEY] = $existing[OpenAITranslationEngine::FIELD_API_KEY];
 
-        // OpenRouter API key: save only if non-empty.
+        // OpenRouter API key: save only if non-empty in POST, otherwise preserve existing.
         if( !empty( $mt_settings[OpenRouterTranslationEngine::FIELD_API_KEY] ) )
             $settings[OpenRouterTranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[OpenRouterTranslationEngine::FIELD_API_KEY] );
+        elseif( isset( $existing[OpenRouterTranslationEngine::FIELD_API_KEY] ) )
+            $settings[OpenRouterTranslationEngine::FIELD_API_KEY] = $existing[OpenRouterTranslationEngine::FIELD_API_KEY];
 
-        // OpenRouter model: save only if non-empty.
+        // OpenRouter model: save only if non-empty in POST, otherwise preserve existing.
         if( !empty( $mt_settings[OpenRouterTranslationEngine::FIELD_MODEL] ) )
             $settings[OpenRouterTranslationEngine::FIELD_MODEL] = sanitize_text_field( $mt_settings[OpenRouterTranslationEngine::FIELD_MODEL] );
+        elseif( isset( $existing[OpenRouterTranslationEngine::FIELD_MODEL] ) )
+            $settings[OpenRouterTranslationEngine::FIELD_MODEL] = $existing[OpenRouterTranslationEngine::FIELD_MODEL];
 
         return $settings;
     }
