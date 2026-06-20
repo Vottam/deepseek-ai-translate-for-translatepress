@@ -97,15 +97,49 @@ class OpenRouterProvider extends AbstractProvider {
      */
     protected function get_model( TranslationRequest $request = null ): string {
         if ( $request && $request->get_model() ) {
-            return $request->get_model();
+            return $this->normalize_model_slug( $request->get_model() );
         }
 
         $stored_model = $this->get_stored_model();
         if ( ! empty( $stored_model ) ) {
-            return $stored_model;
+            return $this->normalize_model_slug( $stored_model );
         }
 
         return self::DEFAULT_MODEL;
+    }
+
+    /**
+     * Normalize a model slug.
+     *
+     * Converts common display names to OpenRouter slugs.
+     * If the model already looks like a valid slug (contains "/"), return as-is.
+     *
+     * @param string $model Raw model name or slug.
+     * @return string Normalized slug.
+     */
+    private function normalize_model_slug( string $model ): string {
+        $model = trim( $model );
+
+        // Already a valid slug.
+        if ( strpos( $model, '/' ) !== false ) {
+            return $model;
+        }
+
+        // Known display-name → slug mappings.
+        $aliases = [
+            'owl alpha'            => 'openrouter/owl-alpha',
+            'owl-alpha'            => 'openrouter/owl-alpha',
+            'openrouter owl alpha' => 'openrouter/owl-alpha',
+        ];
+
+        $lower = strtolower( $model );
+        if ( isset( $aliases[ $lower ] ) ) {
+            return $aliases[ $lower ];
+        }
+
+        // Warn: model without "/" is likely a display name.
+        // Return as-is so OpenRouter API will surface the real error.
+        return $model;
     }
 
     /**
