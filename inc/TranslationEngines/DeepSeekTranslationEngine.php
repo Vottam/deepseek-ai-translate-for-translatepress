@@ -25,7 +25,7 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
 
     const ENGINE_KEY = 'deepseek_translate';
 
-    const FIELD_API_KEY='***';
+    const FIELD_API_KEY='deepseek-api-key';
 
     /** @var DeepSeekProvider|null */
     private $provider = null;
