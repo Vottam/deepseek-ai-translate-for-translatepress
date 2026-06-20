@@ -197,6 +197,73 @@ class OpenAITranslationEngine extends TRP_Machine_Translator {
             return $integrity;
         }
 
+        // Validate source leak — detect untranslated segments.
+        $source_leak = $validator->validate_source_leak( $chunk, $translations, $source_language, $target_language );
+        if ( is_wp_error( $source_leak ) ) {
+            // Source leak detected — do NOT accept this translation.
+            $this->machine_translator_logger->log( [
+                'error'       => 'source_leak_detected',
+                'error_code'  => $source_leak->get_error_code(),
+                'chunk_size'  => count( $chunk ),
+                'lang_source' => $source_language,
+                'lang_target' => $target_language,
+            ] );
+
+            // Try smaller chunks.
+            foreach ( $retry_sizes as $new_size ) {
+                if ( $new_size >= $chunk_size ) {
+                    continue;
+                }
+
+                $sub_chunks = array_chunk( $chunk, $new_size, true );
+                $all_valid  = true;
+                $all_translated = [];
+
+                foreach ( $sub_chunks as $sub_chunk ) {
+                    $sub_result = $this->translate_chunk_with_retry( $sub_chunk, $source_language, $target_language );
+                    if ( is_wp_error( $sub_result ) ) {
+                        $all_valid = false;
+                        break;
+                    }
+                    $all_translated = array_merge( $all_translated, $sub_result );
+                }
+
+                if ( $all_valid ) {
+                    return $all_translated;
+                }
+
+                $chunk_size = $new_size;
+            }
+
+            return $source_leak;
+        }
+
+        // Validate near-identical long segments.
+        $near_identical = $validator->validate_no_near_identical_long( $chunk, $translations );
+        if ( is_wp_error( $near_identical ) ) {
+            $this->machine_translator_logger->log( [
+                'error'       => 'near_identical_long',
+                'error_code'  => $near_identical->get_error_code(),
+                'chunk_size'  => count( $chunk ),
+                'lang_source' => $source_language,
+                'lang_target' => $target_language,
+            ] );
+            return $near_identical;
+        }
+
+        // Validate mixed-language for non-Latin targets.
+        $mixed_lang = $validator->validate_no_mixed_language( $translations, $target_language );
+        if ( is_wp_error( $mixed_lang ) ) {
+            $this->machine_translator_logger->log( [
+                'error'       => 'mixed_language',
+                'error_code'  => $mixed_lang->get_error_code(),
+                'chunk_size'  => count( $chunk ),
+                'lang_source' => $source_language,
+                'lang_target' => $target_language,
+            ] );
+            return $mixed_lang;
+        }
+
         // Integrity passed — count towards quota and return.
         $this->machine_translator_logger->count_towards_quota( $chunk );
 

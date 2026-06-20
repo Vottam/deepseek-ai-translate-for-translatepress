@@ -10,6 +10,7 @@
 
 namespace hollisho\translatepress\translate\deepseek\inc\Translation;
 
+use hollisho\translatepress\translate\deepseek\inc\Translation\SourceLeakDetector;
 use WP_Error;
 
 /**
@@ -102,6 +103,124 @@ class BatchIntegrityValidator {
         $check = $this->validate_length_ratio( $input_strings, $output_strings );
         if ( is_wp_error( $check ) ) {
             return $check;
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate source leak — detect untranslated segments.
+     *
+     * Uses SourceLeakDetector to check if translated text retains
+     * substantial portions of the source language.
+     *
+     * @param array  $input_strings  Original strings (keyed).
+     * @param array  $output_strings Translated strings (keyed).
+     * @param string $source_lang    Source language code.
+     * @param string $target_lang    Target language code.
+     *
+     * @return true|WP_Error True if no leak, WP_Error if source leak detected.
+     */
+    public function validate_source_leak( array $input_strings, array $output_strings, string $source_lang, string $target_lang ) {
+        $detector = new SourceLeakDetector();
+        $result   = $detector->detect_batch_leak( $input_strings, $output_strings, $source_lang, $target_lang );
+
+        if ( $result['leak_detected'] ) {
+            return new WP_Error(
+                'batch_source_leak',
+                sprintf(
+                    'Source leak detected: %s Leak ratio: %.1f%%. Leaking items: %d/%d.',
+                    $result['details'],
+                    $result['leak_ratio'] * 100,
+                    count( $result['leaking_keys'] ),
+                    count( $output_strings )
+                )
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate near-identical long segments.
+     *
+     * For each output string, checks if it is nearly identical to the input
+     * for long strings (> 100 chars), which indicates the LLM skipped translation.
+     *
+     * @param array $input_strings  Original strings (keyed).
+     * @param array $output_strings Translated strings (keyed).
+     *
+     * @return true|WP_Error
+     */
+    public function validate_no_near_identical_long( array $input_strings, array $output_strings ) {
+        foreach ( $output_strings as $key => $translated ) {
+            $original = $input_strings[ $key ] ?? '';
+
+            // Only check strings longer than 100 chars.
+            if ( strlen( $original ) < 100 ) {
+                continue;
+            }
+
+            // Calculate similarity.
+            similar_text( $original, $translated, $percent );
+
+            if ( $percent > 80 ) {
+                return new WP_Error(
+                    'batch_near_identical_long',
+                    sprintf(
+                        'Batch integrity check failed: item "%s" is %.1f%% identical to original (long string).',
+                        $key,
+                        $percent
+                    )
+                );
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate mixed-language content in non-Latin targets.
+     *
+     * For targets like Korean, Japanese, Thai, etc., checks that the
+     * translation does not contain large blocks of Latin text.
+     *
+     * @param array  $output_strings Translated strings (keyed).
+     * @param string $target_lang    Target language code.
+     *
+     * @return true|WP_Error
+     */
+    public function validate_no_mixed_language( array $output_strings, string $target_lang ) {
+        if ( ! SourceLeakDetector::is_non_latin_target( $target_lang ) ) {
+            return true;
+        }
+
+        foreach ( $output_strings as $key => $translated ) {
+            // Count Latin words (3+ consecutive Latin characters).
+            preg_match_all( '/[a-zA-Z]{3,}/', $translated, $latin_words );
+            $latin_word_count = count( $latin_words[0] );
+
+            // Count total words (approximate).
+            $total_words = str_word_count( preg_replace( '/[^\w\s]/', '', $translated ) );
+
+            if ( $total_words < 5 ) {
+                continue;
+            }
+
+            $latin_ratio = $latin_word_count / max( $total_words, 1 );
+
+            // For non-Latin targets, Latin words should be < 30% (allowing for brand names, etc.).
+            if ( $latin_ratio > 0.30 ) {
+                return new WP_Error(
+                    'batch_mixed_language',
+                    sprintf(
+                        'Batch integrity check failed: item "%s" contains %.1f%% Latin words in a %s translation.',
+                        $key,
+                        $latin_ratio * 100,
+                        $target_lang
+                    )
+                );
+            }
         }
 
         return true;
