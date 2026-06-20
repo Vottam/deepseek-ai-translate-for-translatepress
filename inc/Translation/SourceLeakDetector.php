@@ -865,8 +865,10 @@ class SourceLeakDetector {
             return 0.0;
         }
 
-        $intersection = count( array_intersect( $ngrams1, $ngrams2 ) );
-        $union        = count( array_unique( array_merge( $ngrams1, $ngrams2 ) ) );
+        $unique1      = array_unique( $ngrams1 );
+        $unique2      = array_unique( $ngrams2 );
+        $intersection = count( array_intersect( $unique1, $unique2 ) );
+        $union        = count( array_unique( array_merge( $unique1, $unique2 ) ) );
 
         return $union > 0 ? $intersection / $union : 0.0;
     }
