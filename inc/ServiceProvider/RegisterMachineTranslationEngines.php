@@ -253,9 +253,29 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
                 <p class="description">
                     <?php esc_html_e( 'Enter the OpenRouter model slug (e.g., openai/gpt-4o-mini, anthropic/claude-3-haiku).', 'hollisho-integration-deepseek-for-translatepress' ); ?>
                 </p>
+                <p class="description trp-openrouter-model-warning" style="display:none;color:#d63638;font-weight:600;">
+                    <?php esc_html_e( 'Warning: This looks like a display name, not a model slug. Use the format "provider/model" (e.g., openrouter/owl-alpha).', 'hollisho-integration-deepseek-for-translatepress' ); ?>
+                </p>
             </td>
         </tr>
         </div>
+        <script>
+        (function(){
+            var input = document.getElementById('trp-openrouter-model');
+            var warning = document.querySelector('.trp-openrouter-model-warning');
+            if (!input || !warning) return;
+            input.addEventListener('input', function(){
+                var val = input.value.trim();
+                if (val && val.indexOf('/') === -1 && val.indexOf('~') !== 0) {
+                    warning.style.display = 'block';
+                } else {
+                    warning.style.display = 'none';
+                }
+            });
+            // Trigger on load
+            input.dispatchEvent(new Event('input'));
+        })();
+        </script>
         <?php
     }
 
