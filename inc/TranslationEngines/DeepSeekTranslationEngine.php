@@ -105,8 +105,9 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator {
                     'lang_target' => $target_language,
                 ] );
 
-                // Return WP_Error to signal failure to TranslatePress.
-                return $chunk_result;
+                // Do NOT return WP_Error to TranslatePress; it cannot handle it.
+                // Return accumulated translations so far (may be empty).
+                return $translated_strings;
             }
 
             $translated_strings = array_merge( $translated_strings, $chunk_result );

@@ -228,6 +228,17 @@ class SourceLeakDetector {
             ];
         }
 
+        // Skip short strings (≤ 80 chars) that are identical — likely technical
+        // terms, brand names, code snippets, or file paths that should not be
+        // translated. Treating these as source leak is a false positive.
+        if ( $source_text === $translated && strlen( $source_text ) <= 80 ) {
+            return [
+                'leak_detected' => false,
+                'leak_ratio'    => 0.0,
+                'details'       => 'Identical short string — likely technical term, skipping leak check.',
+            ];
+        }
+
         // Skip if identical (already caught by validate_not_identical, but defensive).
         if ( $source_text === $translated ) {
             return [

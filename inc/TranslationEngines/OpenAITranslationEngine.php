@@ -96,8 +96,9 @@ class OpenAITranslationEngine extends TRP_Machine_Translator {
             $chunk_result = $this->translate_chunk_with_retry( $chunk, $source_language, $target_language );
 
             if ( is_wp_error( $chunk_result ) ) {
-                // Integrity check failed — do NOT save partial translations.
-                // Log the error and return what we have so far, but mark it.
+                // Integrity check failed — log the error.
+                // Do NOT return WP_Error to TranslatePress; it cannot handle it.
+                // Return accumulated translations so far (may be empty).
                 $this->machine_translator_logger->log( [
                     'error'       => 'batch_integrity_fail',
                     'error_code'  => $chunk_result->get_error_code(),
@@ -106,8 +107,8 @@ class OpenAITranslationEngine extends TRP_Machine_Translator {
                     'lang_target' => $target_language,
                 ] );
 
-                // Return WP_Error to signal failure to TranslatePress.
-                return $chunk_result;
+                // Return what we have so far — never WP_Error to TranslatePress.
+                return $translated_strings;
             }
 
             $translated_strings = array_merge( $translated_strings, $chunk_result );

@@ -323,7 +323,21 @@ class BatchIntegrityValidator {
     }
 
     /**
+     * Maximum string length (chars) for the identical-content exemption.
+     * Short strings (e.g. technical terms, brand names, code snippets) that
+     * are identical to the input are often correct — the provider simply
+     * recognised that the content should not be translated.
+     *
+     * @var int
+     */
+    const IDENTICAL_SHORT_STRING_LIMIT = 80;
+
+    /**
      * Validate that no output is identical to its input.
+     *
+     * Short strings (≤ IDENTICAL_SHORT_STRING_LIMIT chars) are exempted:
+     * technical terms, brand names, file paths, CLI commands, etc. often
+     * legitimately remain unchanged after translation.
      *
      * @param array $input  Input strings.
      * @param array $output Output strings.
@@ -332,6 +346,10 @@ class BatchIntegrityValidator {
     public function validate_not_identical( array $input, array $output ) {
         foreach ( $output as $key => $translated ) {
             if ( isset( $input[ $key ] ) && $input[ $key ] === $translated ) {
+                // Exempt short strings — likely technical terms that should not be translated.
+                if ( strlen( $input[ $key ] ) <= self::IDENTICAL_SHORT_STRING_LIMIT ) {
+                    continue;
+                }
                 return new WP_Error(
                     'batch_identical_item',
                     sprintf(
