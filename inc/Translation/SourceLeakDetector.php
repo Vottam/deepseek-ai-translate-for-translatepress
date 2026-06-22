@@ -458,11 +458,15 @@ class SourceLeakDetector {
         if ( mb_strlen( $source, 'UTF-8' ) > 50 && mb_strlen( $translated, 'UTF-8' ) > 50 ) {
             $similarity = 0;
             similar_text( mb_strtolower( $source, 'UTF-8' ), mb_strtolower( $translated, 'UTF-8' ), $similarity );
-            if ( $similarity > 85 ) {
+            // Use higher threshold for Latin-script language pairs where
+            // character overlap naturally exceeds 85% even in good translations.
+            $near_identical_threshold = $this->is_latin_pair( $source_lang, $target_lang ) ? 95 : 85;
+            if ( $similarity > $near_identical_threshold ) {
                 $leak_signals++;
                 $details[] = sprintf(
-                    'Near-identical text: %.1f%% similarity (threshold 85%%).',
-                    $similarity
+                    'Near-identical text: %.1f%% similarity (threshold %d%%).',
+                    $similarity,
+                    $near_identical_threshold
                 );
             }
         }
@@ -843,6 +847,20 @@ class SourceLeakDetector {
 
         // Default for dissimilar pairs.
         return 0.60; // 60%.
+    }
+
+    /**
+     * Check if a language pair is Latin-script (both source and target use Latin script).
+     * Latin-script pairs naturally have high character overlap even in good translations.
+     *
+     * @param string $source_lang Source language code.
+     * @param string $target_lang Target language code.
+     *
+     * @return bool True if both languages use Latin script.
+     */
+    private function is_latin_pair( string $source_lang, string $target_lang ): bool {
+        $non_latin = array_keys( self::NON_LATIN_SCRIPTS );
+        return ! in_array( $source_lang, $non_latin, true ) && ! in_array( $target_lang, $non_latin, true );
     }
 
     /**
