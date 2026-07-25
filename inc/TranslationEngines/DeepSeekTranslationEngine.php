@@ -129,9 +129,10 @@ class DeepSeekTranslationEngine extends TRP_Machine_Translator
 
                         if ( isset( $translations[ $i ] ) && !empty( $translations[ $i ] ) ) {
                             $translated_strings[ $key ] = $translations[ $i ];
-                        } else {
-                            $translated_strings[ $key ] = $old_string;
                         }
+                        // If translation failed: do NOT include key in return.
+                        // TranslatePress will keep the string as untranslated/pending.
+                        // NEVER save the original string as a "valid translation".
 
                         $i++;
 
