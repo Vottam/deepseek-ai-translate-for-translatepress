@@ -4,6 +4,7 @@ namespace hollisho\translatepress\translate\deepseek\inc\ServiceProvider;
 use hollisho\translatepress\translate\deepseek\inc\Base\ServiceProviderInterface;
 use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\DeepSeekTranslationEngine;
 use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\OpenAITranslationEngine;
+use hollisho\translatepress\translate\deepseek\inc\TranslationEngines\OpenRouterTranslationEngine;
 use TRP_Translate_Press;
 
 /**
@@ -31,6 +32,7 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
     public function add_engine_classes( $classes ){
         $classes[DeepSeekTranslationEngine::ENGINE_KEY] = DeepSeekTranslationEngine::class;
         $classes[OpenAITranslationEngine::ENGINE_KEY] = OpenAITranslationEngine::class;
+        $classes[OpenRouterTranslationEngine::ENGINE_KEY] = OpenRouterTranslationEngine::class;
         return $classes;
     }
 
@@ -42,6 +44,10 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         $engines[] = [
             'value' => OpenAITranslationEngine::ENGINE_KEY,
             'label' => esc_html(__('OpenAI', 'hollisho-integration-deepseek-for-translatepress')),
+        ];
+        $engines[] = [
+            'value' => OpenRouterTranslationEngine::ENGINE_KEY,
+            'label' => esc_html(__('OpenRouter', 'hollisho-integration-deepseek-for-translatepress')),
         ];
 
         return $engines;
@@ -66,6 +72,10 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
             $trp = TRP_Translate_Press::get_trp_instance();
             $machine_translator = $trp->get_component( 'machine_translator' );
             $api_check = $machine_translator->check_api_key_validity();
+        } elseif ( OpenRouterTranslationEngine::ENGINE_KEY === $translation_engine ) {
+            $trp = TRP_Translate_Press::get_trp_instance();
+            $machine_translator = $trp->get_component( 'machine_translator' );
+            $api_check = $machine_translator->check_api_key_validity();
         }
 
         if ( isset($api_check) && true === $api_check['error'] ) {
@@ -79,6 +89,8 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
         if ( $show_errors && DeepSeekTranslationEngine::ENGINE_KEY === $translation_engine ) {
             $text_input_classes[] = 'trp-text-input-error';
         } elseif ( $show_errors && OpenAITranslationEngine::ENGINE_KEY === $translation_engine ) {
+            $text_input_classes[] = 'trp-text-input-error';
+        } elseif ( $show_errors && OpenRouterTranslationEngine::ENGINE_KEY === $translation_engine ) {
             $text_input_classes[] = 'trp-text-input-error';
         }
 
@@ -179,6 +191,63 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
             </td>
         </tr>
 
+        <!-- OpenRouter settings -->
+        <?php
+        $show_errors_or   = false;
+        $error_message_or = '';
+        if ( OpenRouterTranslationEngine::ENGINE_KEY === $translation_engine ) {
+            $api_check_or = $machine_translator->check_api_key_validity();
+            if ( isset($api_check_or) && true === $api_check_or['error'] ) {
+                $error_message_or = $api_check_or['message'];
+                $show_errors_or    = true;
+            }
+        }
+        $text_input_classes_or = array('trp-text-input');
+        if ( $show_errors_or ) {
+            $text_input_classes_or[] = 'trp-text-input-error';
+        }
+        ?>
+        <tr class="trp-engine" data-trp-openrouter-engine="<?php echo esc_attr(OpenRouterTranslationEngine::ENGINE_KEY); ?>">
+            <th scope="row">
+                <?php echo esc_html(__('OpenRouter API key', 'hollisho-integration-deepseek-for-translatepress')); ?>
+            </th>
+            <td>
+                <?php if ( $show_errors_or ) { ?>
+                    <p class="trp-error-inline">
+                        <?php echo wp_kses_post( $error_message_or ); ?>
+                    </p>
+                <?php } ?>
+                <input type="text" id="trp-openrouter-api-key"
+                       class="<?php echo esc_html( implode( ' ', $text_input_classes_or ) ); ?>"
+                       name="trp_machine_translation_settings[<?php echo esc_attr(OpenRouterTranslationEngine::FIELD_API_KEY); ?>]"
+                       value="<?php if( !empty( $settings[OpenRouterTranslationEngine::FIELD_API_KEY] ) ) echo esc_attr( $settings[OpenRouterTranslationEngine::FIELD_API_KEY] ); ?>"/>
+                <?php if ( method_exists( $machine_translator, 'automatic_translation_svg_output' ) && OpenRouterTranslationEngine::ENGINE_KEY === $translation_engine ) {
+                    $machine_translator->automatic_translation_svg_output( $show_errors_or );
+                } ?>
+                <p class="description">
+                    <?php
+                    $text_or = __( 'Visit <a href="%s" target="_blank">this link</a> to get your OpenRouter API key.', 'hollisho-integration-deepseek-for-translatepress' );
+                    echo wp_kses( sprintf( $text_or, 'https://openrouter.ai/keys' ), [ 'a' => [ 'href' => [], 'target'=> [] ] ] );
+                    ?>
+                </p>
+            </td>
+        </tr>
+        <tr class="trp-engine" data-trp-openrouter-engine="<?php echo esc_attr(OpenRouterTranslationEngine::ENGINE_KEY); ?>">
+            <th scope="row">
+                <?php echo esc_html(__('OpenRouter model', 'hollisho-integration-deepseek-for-translatepress')); ?>
+            </th>
+            <td>
+                <input type="text" id="trp-openrouter-model"
+                       class="trp-text-input"
+                       name="trp_machine_translation_settings[<?php echo esc_attr(OpenRouterTranslationEngine::FIELD_MODEL); ?>]"
+                       value="<?php if( !empty( $settings[OpenRouterTranslationEngine::FIELD_MODEL] ) ) echo esc_attr( $settings[OpenRouterTranslationEngine::FIELD_MODEL] ); ?>"
+                       placeholder="openai/gpt-4o-mini"/>
+                <p class="description">
+                    <?php echo esc_html__('Default: openai/gpt-4o-mini', 'hollisho-integration-deepseek-for-translatepress'); ?>
+                </p>
+            </td>
+        </tr>
+
         <?php
     }
 
@@ -199,6 +268,15 @@ class RegisterMachineTranslationEngines implements ServiceProviderInterface
 
         if( !empty( $mt_settings[OpenAITranslationEngine::FIELD_MODEL] ) )
             $settings[OpenAITranslationEngine::FIELD_MODEL] = sanitize_text_field( $mt_settings[OpenAITranslationEngine::FIELD_MODEL] );
+
+        if( !empty( $mt_settings[OpenRouterTranslationEngine::FIELD_API_KEY] ) )
+            $settings[OpenRouterTranslationEngine::FIELD_API_KEY] = sanitize_text_field( $mt_settings[OpenRouterTranslationEngine::FIELD_API_KEY] );
+        elseif( isset( $settings[OpenRouterTranslationEngine::FIELD_API_KEY] ) ) {
+            // Preserve existing key when field is empty in POST
+        }
+
+        if( !empty( $mt_settings[OpenRouterTranslationEngine::FIELD_MODEL] ) )
+            $settings[OpenRouterTranslationEngine::FIELD_MODEL] = sanitize_text_field( $mt_settings[OpenRouterTranslationEngine::FIELD_MODEL] );
 
         return $settings;
     }
